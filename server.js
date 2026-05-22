@@ -609,6 +609,11 @@ app.get("/api/clicks", (req, res) => {
 const PORT = process.env.PORT || 3002;
 
 refreshAll().then(() => {
+  // If AH returned 0 on cold boot, retry once after 45s
+  if (DEALS.filter(d => d.supermarket === "albert_heijn").length === 0) {
+    console.log("AH returned 0 deals on boot — retrying in 45s...");
+    setTimeout(refreshAll, 45000);
+  }
   app.listen(PORT, () => {
     console.log(`\nFareboos Weekly Deals server running on http://localhost:${PORT}`);
     console.log(`Deals loaded: ${DEALS.length}`);
