@@ -119,8 +119,9 @@ async function fetchAhDeals() {
 
     const imgObj = (p.images || []).find(i => i.width >= 200) || p.images?.[0];
 
+    const webshopId = p.webshopId || p.hqId;
     const deal = {
-      id: `ah_${p.webshopId || p.hqId}`,
+      id: `ah_${webshopId}`,
       title: p.title || p.brand,
       brand: p.brand || "",
       category: mapAhCategory(p.mainCategory || p.subCategory || ""),
@@ -135,6 +136,7 @@ async function fetchAhDeals() {
       valid_till: p.bonusEndDate || new Date(Date.now() + 7 * 86400000).toISOString(),
       store_ids: ahStoreIds,
       np_id: `np_ah_${p.id}`,
+      product_url: `https://www.ah.nl/producten/product/wi${webshopId}/`,
     };
     deals.push(deal);
   }
@@ -236,6 +238,7 @@ async function getJumboPromo(path, jumboStoreIds) {
     valid_till: validTill.toISOString(),
     store_ids: jumboStoreIds,
     np_id: `np_jumbo_${promoId}`,
+    product_url: `https://www.jumbo.com${path}`,
   };
 }
 
@@ -381,6 +384,7 @@ async function fetchLidlDeals() {
           const imgList = d.imageList_V1 || d.imageList || [];
           const imageUrl = imgList[0]?.image || d.image || "";
 
+          const canonicalUrl = d.canonicalUrl || d.linkUrl || null;
           allDeals.push({
             id: itemKey,
             title,
@@ -397,6 +401,7 @@ async function fetchLidlDeals() {
             valid_till: validTill,
             store_ids: lidlStoreIds,
             np_id: `np_lidl_${item.id}`,
+            product_url: canonicalUrl ? `https://www.lidl.nl${canonicalUrl}` : null,
           });
         }
       }
