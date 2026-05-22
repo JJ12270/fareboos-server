@@ -11,6 +11,7 @@ app.use(express.json());
 // ─── In-memory state ──────────────────────────────────────────────────────────
 let DEALS = [];
 let STORES = buildStores();
+let CLICKS = [];
 let lastRefresh = null;
 let ahToken = null;
 let ahTokenExpiry = 0;
@@ -584,6 +585,24 @@ app.get("/api/map/stores", (req, res) => {
     open: s.open,
     dealCount: DEALS.filter(d => d.store_ids.includes(s.id)).length,
   })));
+});
+
+// ─── Click tracking ───────────────────────────────────────────────────────────
+app.post("/api/track", (req, res) => {
+  const { product_id, store_id, source, timestamp, conversion_type } = req.body || {};
+  CLICKS.push({
+    id: Date.now(),
+    product_id: product_id || 'unknown',
+    store_id: store_id || 'unknown',
+    source_screen: source || 'unknown',
+    timestamp: timestamp || new Date().toISOString(),
+    conversion_type: conversion_type || 'click',
+  });
+  res.json({ ok: true });
+});
+
+app.get("/api/clicks", (req, res) => {
+  res.json(CLICKS);
 });
 
 // ─── Start server ──────────────────────────────────────────────────────────────
