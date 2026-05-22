@@ -141,6 +141,135 @@ async function fetchAhDeals() {
   return deals;
 }
 
+// ─── Jumbo scraper ────────────────────────────────────────────────────────────
+function jumboGet(path) {
+  return new Promise((resolve) => {
+    const req = https.get({
+      host: "www.jumbo.com", path, timeout: 15000,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "text/html",
+        "Accept-Language": "nl-NL,nl;q=0.9",
+      },
+    }, (res) => {
+      let data = ""; res.on("data", c => data += c);
+      res.on("end", () => resolve({ status: res.statusCode, data }));
+    });
+    req.on("error", () => resolve({ status: 0, data: "" }));
+    req.on("timeout", () => { req.destroy(); resolve({ status: 0, data: "" }); });
+  });
+}
+
+function parseJumboTag(tag, currentPrice) {
+  const t = (tag || "").toLowerCase().trim();
+  const nVoorX = t.match(/^(\d+)\s+voor\s+(\d+[,.]?\d*)/);
+  if (nVoorX) {
+    const count = parseInt(nVoorX[1]);
+    const total = parseFloat(nVoorX[2].replace(",", "."));
+    const dealPrice = Math.round((total / count) * 100) / 100;
+    const regularPrice = currentPrice > dealPrice ? currentPrice : Math.round(dealPrice * 1.35 * 100) / 100;
+    const pct = regularPrice > 0 ? Math.round((1 - dealPrice / regularPrice) * 100) : 0;
+    return { dealPrice, regularPrice, pct, label: tag.trim() };
+  }
+  const oneOne = t.match(/(\d+)\s*\+\s*(\d+)\s*gratis/);
+  if (oneOne) {
+    const free = parseInt(oneOne[2]);
+    const pct = Math.round((free / (parseInt(oneOne[1]) + free)) * 100);
+    return { dealPrice: currentPrice, regularPrice: currentPrice, pct, label: tag.trim() };
+  }
+  const pctMatch = t.match(/(-?\d+)\s*%/);
+  if (pctMatch) {
+    const pct = Math.abs(parseInt(pctMatch[1]));
+    const regularPrice = pct > 0 ? Math.round(currentPrice / (1 - pct / 100) * 100) / 100 : currentPrice;
+    return { dealPrice: currentPrice, regularPrice, pct, label: `-${pct}%` };
+  }
+  return { dealPrice: currentPrice, regularPrice: currentPrice, pct: 0, label: tag.trim() || "Actie" };
+}
+
+async function getJumboPromo(path, jumboStoreIds) {
+  const r = await jumboGet(path);
+  if (r.status !== 200) return null;
+  const html = r.data;
+
+  const promoId = path.match(/\/(\d+)$/)?.[1] || path;
+  const tag = (html.match(/jum-tag[^>]*><!----><!--\[-->([\s\S]*?)<!--\]-->/) || [])[1]?.trim() || "";
+  const dateMatch = html.match(/(\w{2} \d{1,2} t\/m \w{2} \d{1,2} \w+)/);
+  const dateStr = dateMatch ? dateMatch[1] : "";
+
+  // Parse date range
+  const now = new Date();
+  const validFrom = new Date(now); validFrom.setHours(0, 0, 0, 0);
+  const validTill = new Date(now); validTill.setDate(validTill.getDate() + 7); validTill.setHours(23, 59, 59, 0);
+
+  // Get first product image (DAM images only)
+  const imgMatch = html.match(/src="(https:\/\/www\.jumbo\.com\/dam-images\/[^"]+)" alt="([^"]+)" class="ima/);
+  if (!imgMatch) return null;
+  const imageUrl = imgMatch[1];
+  const productName = imgMatch[2];
+
+  // Get first price
+  const priceMatch = html.match(/Prijs:\s*€\s*([\d,]+)/);
+  if (!priceMatch) return null;
+  const currentPrice = parseFloat(priceMatch[1].replace(",", "."));
+  if (!currentPrice || currentPrice <= 0) return null;
+
+  // Get product SKU from first product link
+  const skuMatch = html.match(/\/producten\/[^"]*-([A-Z0-9]+STK|[A-Z0-9]+CUP|[A-Z0-9]+ZK|[A-Z0-9]+DSL)"/);
+  const sku = skuMatch ? skuMatch[1] : promoId;
+
+  const { dealPrice, regularPrice, pct, label } = parseJumboTag(tag, currentPrice);
+
+  return {
+    id: `jumbo_${promoId}`,
+    title: productName,
+    brand: productName.startsWith("Jumbo ") ? "Jumbo" : productName.split(" ")[0],
+    category: mapJumboCategory(productName),
+    supermarket: "jumbo",
+    deal_price: dealPrice,
+    regular_price: regularPrice,
+    discount_percent: pct,
+    discount_label: label,
+    unit: "",
+    image_url: imageUrl,
+    valid_from: validFrom.toISOString(),
+    valid_till: validTill.toISOString(),
+    store_ids: jumboStoreIds,
+    np_id: `np_jumbo_${promoId}`,
+  };
+}
+
+function mapJumboCategory(title) {
+  const t = title.toLowerCase();
+  if (t.match(/vlees|kip|ham|worst|burger|karbonade|spek|rund|varken|lam|kalf|steak|schnitzel/)) return "vlees_vis";
+  if (t.match(/vis|zalm|haring|tonijn|garnaal|kabeljauw|pangasius/)) return "vlees_vis";
+  if (t.match(/groente|fruit|paprika|tomaat|avocado|sla|spinazie|broccoli|aardappel|mango|aardbei|appel|peer|banaan|sinaasappel/)) return "groente_fruit";
+  if (t.match(/melk|kaas|yoghurt|kwark|boter|room|ei|zuivel|mozzarella|skyr/)) return "zuivel_eieren";
+  if (t.match(/brood|baguette|bollen|croissant|cake|koek|gebak|bagel|donut/)) return "bakkerij";
+  if (t.match(/bier|wijn|frisdrank|sap|koffie|thee|water|tonic|ijsthee|cola|fanta|spa/)) return "dranken";
+  if (t.match(/ijs|diepvries|pizza|snack.*diep/)) return "diepvries";
+  if (t.match(/snoep|chips|noot|chocola|drop|gummi|koek|snack/)) return "snacks";
+  if (t.match(/pasta|rijst|soep|saus|olie|mayonaise|ketchup|hagelslag/)) return "pasta_rijst";
+  if (t.match(/wasmiddel|zeep|shampoo|deodorant|schoonmaak|toiletpapier|keukenrol/)) return "huishouden";
+  if (t.match(/bloem|plant|tuin/)) return "bloemen_planten";
+  return "overig";
+}
+
+async function fetchJumboDeals() {
+  console.log("Fetching Jumbo deals...");
+  const main = await jumboGet("/aanbiedingen/nu");
+  if (main.status !== 200) { console.log("Jumbo: could not fetch main page"); return []; }
+
+  const links = [...new Set([...main.data.matchAll(/href="(\/aanbiedingen\/[^/]+\/\d+)"/g)].map(m => m[1]))];
+  console.log(`Jumbo: found ${links.length} promotions`);
+
+  const jumboStoreIds = STORES.filter(s => s.supermarket === "jumbo").map(s => s.id);
+
+  const results = await Promise.allSettled(links.map(link => getJumboPromo(link, jumboStoreIds)));
+  const deals = results.filter(r => r.status === "fulfilled" && r.value).map(r => r.value);
+  console.log(`Jumbo: extracted ${deals.length} deals`);
+  return deals;
+}
+
 // ─── Lidl API ─────────────────────────────────────────────────────────────────
 async function getLidlCampaignId() {
   return new Promise((resolve) => {
@@ -288,20 +417,23 @@ function mapLidlCategory(title) {
 async function refreshAll() {
   console.log(`\n[${new Date().toISOString()}] Refreshing deals...`);
   try {
-    const [ahDeals, lidlDeals] = await Promise.allSettled([
+    const [ahDeals, lidlDeals, jumboDeals] = await Promise.allSettled([
       fetchAhDeals(),
       fetchLidlDeals(),
+      fetchJumboDeals(),
     ]);
 
     const ah = ahDeals.status === "fulfilled" ? ahDeals.value : [];
     const lidl = lidlDeals.status === "fulfilled" ? lidlDeals.value : [];
+    const jumbo = jumboDeals.status === "fulfilled" ? jumboDeals.value : [];
 
     if (ahDeals.status === "rejected") console.error("AH error:", ahDeals.reason?.message);
     if (lidlDeals.status === "rejected") console.error("Lidl error:", lidlDeals.reason?.message);
+    if (jumboDeals.status === "rejected") console.error("Jumbo error:", jumboDeals.reason?.message);
 
-    DEALS = [...ah, ...lidl];
+    DEALS = [...ah, ...lidl, ...jumbo];
     lastRefresh = new Date().toISOString();
-    console.log(`Total deals loaded: ${DEALS.length} (AH: ${ah.length}, Lidl: ${lidl.length})`);
+    console.log(`Total deals loaded: ${DEALS.length} (AH: ${ah.length}, Lidl: ${lidl.length}, Jumbo: ${jumbo.length})`);
   } catch (e) {
     console.error("Refresh error:", e.message);
   }
@@ -327,6 +459,7 @@ app.get("/api/status", (req, res) => {
     supermarkets: {
       albert_heijn: DEALS.filter(d => d.supermarket === "albert_heijn").length,
       lidl: DEALS.filter(d => d.supermarket === "lidl").length,
+      jumbo: DEALS.filter(d => d.supermarket === "jumbo").length,
     },
   });
 });
@@ -457,6 +590,7 @@ refreshAll().then(() => {
     console.log(`Deals loaded: ${DEALS.length}`);
     console.log(`  - Albert Heijn: ${DEALS.filter(d => d.supermarket === "albert_heijn").length}`);
     console.log(`  - Lidl: ${DEALS.filter(d => d.supermarket === "lidl").length}`);
+    console.log(`  - Jumbo: ${DEALS.filter(d => d.supermarket === "jumbo").length}`);
   });
 });
 
