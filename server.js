@@ -70,7 +70,7 @@ async function fetchAhDeals() {
   while (true) {
     const res = await axios.get(
       `https://api.ah.nl/mobile-services/product/search/v2?bonus=BONUS&size=100&page=${page}`,
-      { headers, timeout: 15000 }
+      { headers, timeout: 30000 }
     );
     const items = (res.data.products || []).filter(p => p.isBonus);
     if (items.length === 0 && page > 0) break;
@@ -451,6 +451,11 @@ function haversine(lat1, lon1, lat2, lon2) {
 }
 
 // ─── Routes ────────────────────────────────────────────────────────────────────
+app.post("/api/refresh", async (req, res) => {
+  res.json({ ok: true, message: "Refresh started" });
+  refreshAll();
+});
+
 app.get("/api/status", (req, res) => {
   res.json({
     ok: true,
