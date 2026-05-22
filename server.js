@@ -294,35 +294,20 @@ async function getLidlNonFoodCampaignIds() {
 
 function mapLidlNonFoodCategory(title) {
   const t = title.toLowerCase();
-  // Garden
-  if (t.match(/grasmaaier|robotmaaier|tuinslang|tuinschaar|heggeschaar|tuinhark|schoffel|spade|kruiwagen|plantenbak|tuin|compost|gazon|onkruid|bloempot|kas|serre|sproeier|vijver/)) return "tuin";
+  // Garden / outdoor
+  if (t.match(/grasmaaier|robotmaaier|tuinslang|tuinschaar|heggeschaar|tuinhark|schoffel|spade|kruiwagen|plantenbak|compost|gazon|onkruid|bloempot|kas\b|serre|sproeier|vijver|tuinstoel|tuintafel|parasol|partytent|bbq\b|barbecue|grill\b|terras|tuinverlichting|tuinslang|tuinpomp|regenwater|compostvat|afdekzeil/)) return "tuin";
+  if (t.match(/accu.*grasmaaier|elektrische grasmaaier|benzine grasmaaier/)) return "tuin";
   // Power tools / hand tools
-  if (t.match(/boormachine|schroefboormachine|cirkelzaag|reciprozaag|slijpschijf|haakse slijper|klopboormachine|schroevendraaier|moersleutel|tang|hamer|zaag|boor|schaaf|vijl|meetlat|waterpas|kitpistool|verfroller|kwast|trapleer|ladder|stelling|accu(-| )(kruimel|stofzuiger|blazer|polijst|spijker)|parkside|gereedschapskoffer/)) return "gereedschap";
-  if (t.match(/accu.*(schroef|boor|zaag|slijp|haak|klop|spijker|polijst|klopb)|accu-(schroef|boor|zaag)/)) return "gereedschap";
+  if (t.match(/boormachine|schroefboormachine|cirkelzaag|reciprozaag|slijpschijf|haakse slijper|klopboormachine|schroevendraaier|moersleutel|tang\b|hamer\b|zaag\b|boor\b|schaaf\b|vijl\b|meetlat|waterpas|kitpistool|verfroller|kwast\b|trapleer|ladder\b|stelling\b|gereedschapskoffer|ducttape|tape\b|parkside|accu-schroef|accu-boor|accu-zaag|accu-recipro|accu-cirkel|accu-slijp|accu-haaks|accu-klop|spijkerpistool|vernevelaar|schildersbenodigdheden|rolborstel|afplakband|boormachine|sloophamer|klinkhamer|schroevendraaier/)) return "gereedschap";
   // Clothing / accessories
-  if (t.match(/broek|shirt|trui|jas|vest|jurk|rok|legging|sokken|ondergoed|bh|kous|sjaal|muts|handschoen|regenjas|bikini|zwembroek|sportbeha|sneaker|schoen|laars|slipper|sandaal|kleding|lidl heren|lidl dames|kersttrui|overall|werkbroek|polo/)) return "kleding";
-  // Kitchen / home appliances
-  if (t.match(/wasmachine|droger|vaatwasser|magnetron|oven|airfryer|koffiezetapparaat|waterkoker|broodrooster|blender|mixer|keukenapparaat|stofzuiger|kruimeldief|strijkijzer|ventilator|heater|kachel|lamp|ledlamp|accu.*(stofzuiger|kruimel)/)) return "huishouden";
+  if (t.match(/broek\b|shirt\b|trui\b|jas\b|vest\b|jurk\b|rok\b|legging\b|sokken|ondergoed|bh\b|kous\b|sjaal\b|muts\b|handschoen|regenjas|bikini|zwembroek|sportbeha|sneaker|schoen\b|laars\b|slipper\b|sandaal|kleding|lidl heren|lidl dames|kersttrui|overall\b|werkbroek|polo\b|bandana|cap\b|pet\b|riemen\b|riem\b|rugzak|tas\b|wallet|portemonnee|lidl beker|thermosbeker|thermos\b/)) return "kleding";
+  // Home appliances / household
+  if (t.match(/wasmachine|droger\b|vaatwasser|magnetron|oven\b|airfryer|koffiezetapparaat|waterkoker|broodrooster|blender\b|mixer\b|keukenapparaat|stofzuiger|kruimeldief|strijkijzer|ventilator|heater\b|kachel\b|ledlamp|lamp\b|verlichting|accu.*(stofzuiger|kruimeldief)|robotstofzuiger|luchtbevochtiger|luchtreiniger|ventilatorkachel|koelkast|vriezer|koelbox|keukenweegschaal|keukenmachine/)) return "huishouden";
   // Plants / flowers
-  if (t.match(/plant|bloem|cactus|geranium|lelie|lavendel|orchidee|bonsai|pioenen|stekje/)) return "bloemen_planten";
-  // Sport / fitness
-  if (t.match(/fiets|e-bike|fitness|dumbbell|yogamat|sporttas|helm|fietstas|step|scooter|zwemband|ski|snowboard/)) return "overig";
-  return "overig";
-}
-
-function isLidlNonFood(title) {
-  const t = title.toLowerCase();
-  // Reject clear food items
-  if (t.match(/vlees|kip|vis|gehakt|worst|biefstuk|entrecote|karbonade|zalm|tonijn|garnaal/)) return false;
-  if (t.match(/melk|kaas|boter|yoghurt|kwark|room|ei |eieren|zuivel/)) return false;
-  if (t.match(/brood|baguette|croissant|cake|koek|taart|donuts|gebak/)) return false;
-  if (t.match(/groente|fruit|tomaat|paprika|avocado|spinazie|komkommer|aardappel|banaan|appel|peer|aardbei|mango|citroen|sinaasappel|druiven/)) return false;
-  if (t.match(/bier|wijn|champagne|frisdrank|sap|koffie|thee|water |cola|tonic/)) return false;
-  if (t.match(/pasta|rijst|soep|saus|olie|azijn|mayonaise|ketchup|pindakaas|hagelslag|muesli|ontbijt/)) return false;
-  if (t.match(/snoep|chips|noten|chocolade|haribo|drop|gummi|ijs\b|schepijs/)) return false;
-  if (t.match(/biologisch\b|fairtrade\b/)) return false;
-  // Accept everything else
-  return true;
+  if (t.match(/\bplant\b|bloem\b|cactus|geranium|lelie\b|lavendel|orchidee|bonsai|pioenen|stekje|bloembol|zaad\b|tuinplant/)) return "bloemen_planten";
+  // Sport / fitness / bike
+  if (t.match(/fiets\b|e-bike|fitness|dumbbell|yogamat|sporttas|helm\b|fietstas|step\b|scooter\b|zwemband|ski\b|snowboard|hardloopschoenen|sportschoenen|wielrennen|mtb\b/)) return "overig";
+  return null; // null = reject (unknown = probably food)
 }
 
 async function fetchLidlDeals() {
@@ -366,7 +351,10 @@ async function fetchLidlDeals() {
 
           const title = d.title || d.fullTitle || "";
           if (!title) continue;
-          if (!isLidlNonFood(title)) continue;
+
+          // Whitelist: only keep items that positively match a non-food category
+          const category = mapLidlNonFoodCategory(title);
+          if (!category) continue;
 
           const itemKey = `lidl_${item.id}`;
           if (seenIds.has(itemKey)) continue;
@@ -397,7 +385,7 @@ async function fetchLidlDeals() {
             id: itemKey,
             title,
             brand: "",
-            category: mapLidlNonFoodCategory(title),
+            category,
             supermarket: "lidl",
             deal_price: dealPrice,
             regular_price: regularPrice > dealPrice ? regularPrice : dealPrice,
