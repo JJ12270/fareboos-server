@@ -271,115 +271,155 @@ async function fetchJumboDeals() {
   return deals;
 }
 
-// ─── Lidl API ─────────────────────────────────────────────────────────────────
-async function getLidlCampaignId() {
-  return new Promise((resolve) => {
-    const req = https.get(
-      "https://www.lidl.nl/q/search?q=aanbieding&country=NL&language=nl",
-      {
-        timeout: 10000,
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          "Accept": "text/html",
-          "Accept-Language": "nl-NL,nl;q=0.9",
-        },
+// ─── Lidl non-food API ────────────────────────────────────────────────────────
+async function getLidlNonFoodCampaignIds() {
+  try {
+    const res = await axios.get("https://www.lidl.nl/c/non-food-actueel", {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "text/html",
+        "Accept-Language": "nl-NL,nl;q=0.9",
       },
-      (res) => {
-        res.resume();
-        const loc = res.headers.location || "";
-        const match = loc.match(/a(\d{6,})/);
-        resolve(match ? match[1] : null);
-      }
-    );
-    req.on("error", () => resolve(null));
-    req.on("timeout", () => { req.destroy(); resolve(null); });
-  });
+      timeout: 12000,
+    });
+    const matches = [...res.data.matchAll(/a(1\d{6,})/g)];
+    const ids = [...new Set(matches.map(m => m[1]))];
+    console.log(`Lidl non-food: found campaign IDs: ${ids.join(", ")}`);
+    return ids;
+  } catch (e) {
+    console.error("Lidl non-food campaign lookup failed:", e.message);
+    return [];
+  }
+}
+
+function mapLidlNonFoodCategory(title) {
+  const t = title.toLowerCase();
+  // Garden
+  if (t.match(/grasmaaier|robotmaaier|tuinslang|tuinschaar|heggeschaar|tuinhark|schoffel|spade|kruiwagen|plantenbak|tuin|compost|gazon|onkruid|bloempot|kas|serre|sproeier|vijver/)) return "tuin";
+  // Power tools / hand tools
+  if (t.match(/boormachine|schroefboormachine|cirkelzaag|reciprozaag|slijpschijf|haakse slijper|klopboormachine|schroevendraaier|moersleutel|tang|hamer|zaag|boor|schaaf|vijl|meetlat|waterpas|kitpistool|verfroller|kwast|trapleer|ladder|stelling|accu(-| )(kruimel|stofzuiger|blazer|polijst|spijker)|parkside|gereedschapskoffer/)) return "gereedschap";
+  if (t.match(/accu.*(schroef|boor|zaag|slijp|haak|klop|spijker|polijst|klopb)|accu-(schroef|boor|zaag)/)) return "gereedschap";
+  // Clothing / accessories
+  if (t.match(/broek|shirt|trui|jas|vest|jurk|rok|legging|sokken|ondergoed|bh|kous|sjaal|muts|handschoen|regenjas|bikini|zwembroek|sportbeha|sneaker|schoen|laars|slipper|sandaal|kleding|lidl heren|lidl dames|kersttrui|overall|werkbroek|polo/)) return "kleding";
+  // Kitchen / home appliances
+  if (t.match(/wasmachine|droger|vaatwasser|magnetron|oven|airfryer|koffiezetapparaat|waterkoker|broodrooster|blender|mixer|keukenapparaat|stofzuiger|kruimeldief|strijkijzer|ventilator|heater|kachel|lamp|ledlamp|accu.*(stofzuiger|kruimel)/)) return "huishouden";
+  // Plants / flowers
+  if (t.match(/plant|bloem|cactus|geranium|lelie|lavendel|orchidee|bonsai|pioenen|stekje/)) return "bloemen_planten";
+  // Sport / fitness
+  if (t.match(/fiets|e-bike|fitness|dumbbell|yogamat|sporttas|helm|fietstas|step|scooter|zwemband|ski|snowboard/)) return "overig";
+  return "overig";
+}
+
+function isLidlNonFood(title) {
+  const t = title.toLowerCase();
+  // Reject clear food items
+  if (t.match(/vlees|kip|vis|gehakt|worst|biefstuk|entrecote|karbonade|zalm|tonijn|garnaal/)) return false;
+  if (t.match(/melk|kaas|boter|yoghurt|kwark|room|ei |eieren|zuivel/)) return false;
+  if (t.match(/brood|baguette|croissant|cake|koek|taart|donuts|gebak/)) return false;
+  if (t.match(/groente|fruit|tomaat|paprika|avocado|spinazie|komkommer|aardappel|banaan|appel|peer|aardbei|mango|citroen|sinaasappel|druiven/)) return false;
+  if (t.match(/bier|wijn|champagne|frisdrank|sap|koffie|thee|water |cola|tonic/)) return false;
+  if (t.match(/pasta|rijst|soep|saus|olie|azijn|mayonaise|ketchup|pindakaas|hagelslag|muesli|ontbijt/)) return false;
+  if (t.match(/snoep|chips|noten|chocolade|haribo|drop|gummi|ijs\b|schepijs/)) return false;
+  if (t.match(/biologisch\b|fairtrade\b/)) return false;
+  // Accept everything else
+  return true;
 }
 
 async function fetchLidlDeals() {
-  console.log("Fetching Lidl deals...");
-  const campaignId = await getLidlCampaignId();
-  if (!campaignId) {
-    console.log("Lidl: could not determine campaign ID");
+  console.log("Fetching Lidl non-food deals...");
+  const campaignIds = await getLidlNonFoodCampaignIds();
+  if (campaignIds.length === 0) {
+    console.log("Lidl: no non-food campaign IDs found");
     return [];
   }
-  console.log(`Lidl: campaign ID = ${campaignId}`);
 
-  const res = await axios.get(
-    `https://www.lidl.nl/c/api/campaigns/${campaignId}/NL/nl`,
-    {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "application/json",
-        "Accept-Language": "nl-NL,nl;q=0.9",
-        "Referer": `https://www.lidl.nl/c/aanbiedingen/a${campaignId}`,
-      },
-      timeout: 15000,
-    }
-  );
-
-  const sections = res.data.sections || [];
   const lidlStoreIds = STORES.filter(s => s.supermarket === "lidl").map(s => s.id);
-  const deals = [];
+  const allDeals = [];
+  const seenIds = new Set();
 
-  for (const section of sections) {
-    if (!section.items || section.items.length === 0) continue;
+  for (const campaignId of campaignIds) {
+    try {
+      const res = await axios.get(
+        `https://www.lidl.nl/c/api/campaigns/${campaignId}/NL/nl`,
+        {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json",
+            "Accept-Language": "nl-NL,nl;q=0.9",
+            "Referer": `https://www.lidl.nl/c/non-food-actueel`,
+          },
+          timeout: 15000,
+        }
+      );
 
-    const validFrom = section.validFrom || new Date().toISOString();
-    const validTill = section.validTill || new Date(Date.now() + 7 * 86400000).toISOString();
+      const sections = res.data.sections || [];
 
-    for (const item of section.items) {
-      if (item.type !== "PRODUCT") continue;
-      const d = item.data || {};
-      if (!d.havingPrice || !d.price) continue;
+      for (const section of sections) {
+        if (!section.items || section.items.length === 0) continue;
+        const validFrom = section.validFrom || new Date().toISOString();
+        const validTill = section.validTill || new Date(Date.now() + 7 * 86400000).toISOString();
 
-      // Get price - check lidlPlus first, then regular price
-      let dealPrice, regularPrice, discountPct, discountLabel;
+        for (const item of section.items) {
+          if (item.type !== "PRODUCT") continue;
+          const d = item.data || {};
+          if (!d.havingPrice || !d.price) continue;
 
-      const plusPricing = d.lidlPlus && d.lidlPlus[0];
-      if (plusPricing && plusPricing.price && plusPricing.price.price > 0) {
-        // Use Lidl Plus price as the deal price (they're shown in the folder)
-        dealPrice = plusPricing.price.price;
-        regularPrice = plusPricing.price.oldPrice || plusPricing.price.discount?.deletedPrice || dealPrice;
-        discountPct = plusPricing.price.discount?.percentageDiscount || 0;
-        discountLabel = plusPricing.highlightText || (discountPct > 0 ? `-${discountPct}%` : "Lidl Plus");
-      } else {
-        const price = d.price;
-        if (!price.price && price.price !== 0) continue;
-        dealPrice = price.price;
-        regularPrice = price.oldPrice || price.discount?.deletedPrice || dealPrice;
-        discountPct = price.discount?.percentageDiscount || 0;
-        discountLabel = discountPct > 0 ? `-${discountPct}%` : (price.discount?.discountText || "Actie");
+          const title = d.title || d.fullTitle || "";
+          if (!title) continue;
+          if (!isLidlNonFood(title)) continue;
+
+          const itemKey = `lidl_${item.id}`;
+          if (seenIds.has(itemKey)) continue;
+          seenIds.add(itemKey);
+
+          let dealPrice, regularPrice, discountPct, discountLabel;
+          const plusPricing = d.lidlPlus && d.lidlPlus[0];
+          if (plusPricing && plusPricing.price && plusPricing.price.price > 0) {
+            dealPrice = plusPricing.price.price;
+            regularPrice = plusPricing.price.oldPrice || plusPricing.price.discount?.deletedPrice || dealPrice;
+            discountPct = plusPricing.price.discount?.percentageDiscount || 0;
+            discountLabel = plusPricing.highlightText || (discountPct > 0 ? `-${discountPct}%` : "Lidl Plus");
+          } else {
+            const price = d.price;
+            if (!price.price && price.price !== 0) continue;
+            dealPrice = price.price;
+            regularPrice = price.oldPrice || price.discount?.deletedPrice || dealPrice;
+            discountPct = price.discount?.percentageDiscount || 0;
+            discountLabel = discountPct > 0 ? `-${discountPct}%` : (price.discount?.discountText || "Actie");
+          }
+
+          if (!dealPrice || dealPrice <= 0) continue;
+
+          const imgList = d.imageList_V1 || d.imageList || [];
+          const imageUrl = imgList[0]?.image || d.image || "";
+
+          allDeals.push({
+            id: itemKey,
+            title,
+            brand: "",
+            category: mapLidlNonFoodCategory(title),
+            supermarket: "lidl",
+            deal_price: dealPrice,
+            regular_price: regularPrice > dealPrice ? regularPrice : dealPrice,
+            discount_percent: discountPct,
+            discount_label: discountLabel,
+            unit: d.price?.packaging?.text || "",
+            image_url: imageUrl,
+            valid_from: validFrom,
+            valid_till: validTill,
+            store_ids: lidlStoreIds,
+            np_id: `np_lidl_${item.id}`,
+          });
+        }
       }
-
-      if (!dealPrice || dealPrice <= 0) continue;
-
-      const imgList = d.imageList_V1 || d.imageList || [];
-      const imageUrl = imgList[0]?.image || d.image || "";
-
-      const deal = {
-        id: `lidl_${item.id}`,
-        title: d.title || d.fullTitle || "",
-        brand: "",
-        category: mapLidlCategory(d.title || ""),
-        supermarket: "lidl",
-        deal_price: dealPrice,
-        regular_price: regularPrice > dealPrice ? regularPrice : dealPrice,
-        discount_percent: discountPct,
-        discount_label: discountLabel,
-        unit: d.price?.packaging?.text || "",
-        image_url: imageUrl,
-        valid_from: validFrom,
-        valid_till: validTill,
-        store_ids: lidlStoreIds,
-        np_id: `np_lidl_${item.id}`,
-      };
-      deals.push(deal);
+      console.log(`Lidl non-food: campaign ${campaignId} → ${allDeals.length} total so far`);
+    } catch (e) {
+      console.error(`Lidl campaign ${campaignId} error:`, e.message);
     }
   }
 
-  console.log(`Lidl: extracted ${deals.length} deals from campaign ${campaignId}`);
-  return deals;
+  console.log(`Lidl non-food: extracted ${allDeals.length} deals across ${campaignIds.length} campaigns`);
+  return allDeals;
 }
 
 // ─── Category mappers ──────────────────────────────────────────────────────────
@@ -398,21 +438,6 @@ function mapAhCategory(cat) {
   return "overig";
 }
 
-function mapLidlCategory(title) {
-  const t = title.toLowerCase();
-  if (t.match(/vlees|hamburger|worst|kipfilet|kip|biefstuk|gehakt|lam|varken|kalf|entrecote|karbonade|speklap/)) return "vlees_vis";
-  if (t.match(/vis|zalm|pangasius|kabeljauw|tonijn|garnaal/)) return "vlees_vis";
-  if (t.match(/groente|fruit|paprika|tomaat|avocado|komkommer|sla|spinazie|broccoli|asperge|aardappel|mango|frambozen|aardbei|sinaasappel|appel|ananas|abrikoz|meloen/)) return "groente_fruit";
-  if (t.match(/pioenen|lelie|geranium|lavendel|cactus|plant|bloem|boom/)) return "bloemen_planten";
-  if (t.match(/melk|kaas|yoghurt|boter|room|ei|zuivel|mozzarella/)) return "zuivel_eieren";
-  if (t.match(/brood|bagel|baguette|bollen|kaneelbrood|croissant|donut|cake|brownietaart|koek/)) return "bakkerij";
-  if (t.match(/bier|wijn|champagne|cava|frisdrank|sap|koffie|thee|water|tonic|ijsthee|kombucha|drank/)) return "dranken";
-  if (t.match(/ijs|sorbet/)) return "diepvries";
-  if (t.match(/snoep|chips|snack|noot|tortilla|gummi|haribo|kinder|ritter|milka|chocolade/)) return "snacks";
-  if (t.match(/wasmiddel|dreft|ariel|zeep|shampoo|deodorant|axe|altijd|schoonmaak|keukenrol|wc/)) return "huishouden";
-  if (t.match(/pasta|rijst|soep|unox|nescafé|hagelslag|pindakaas|jam|sauce|mayo|olie|tortilla/)) return "pasta_rijst";
-  return "overig";
-}
 
 // ─── Main refresh ──────────────────────────────────────────────────────────────
 async function refreshAll() {
